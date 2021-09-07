@@ -1137,7 +1137,7 @@ uint8_t cresizeop(uint8_t* buffer, int cl, uint8_t b){
 
         fileint = open(filenombre,O_RDWR);
         if (errno == 2){
-            fileint = open(filenombre,O_CREAT,00777);
+            fileint = open(filenombre,O_CREAT,0644);
             printf("%d",errno);
             if(fileint < 0){
                 buffer[0] = 2;
@@ -1362,13 +1362,14 @@ uint8_t dumpLoad(int cl,Thread* thread, uint8_t b,uint8_t* buffer){
 uint8_t initLoad(Hash H,char* dir, int* fd){
     //copy pasted load
     //start right here if the file doesn't get written to
-    int dir_fd = open (dir, O_DIRECTORY | O_PATH);
-    if(dir_fd <= 0){
+    printf("attempting to find directory:%s\n",dir);
+    int dir_fd = open(dir, O_DIRECTORY | O_PATH);
+    if(dir_fd == -1){
         //it's over
         return 2;
     }
-    int fileint = openat (dir_fd, (char*)("data.txt"), O_CREAT | O_RDWR, 0644);
-    if(fileint <= 0){
+    int fileint = openat(dir_fd, (char*)("data.txt"), O_CREAT | O_RDWR, 0644);
+    if(fileint == -1){
         //ends load
         return 1;
     }
@@ -1392,12 +1393,13 @@ uint8_t initLoad(Hash H,char* dir, int* fd){
             len = strlen(name);
             if(name[len-1]== 33){
                 name = strtok(name,"!");
+                printf("trying to remove %s\n",name);
                 if (0 != sem_wait(&mainMutex)) err(2,"sem_wait in load");
-                rmByKey(H,name,len,&flag);
+                rmByKey(H,name,len-1,&flag);
                 if (0 != sem_post(&mainMutex)) err(2,"sem_post in load");
                 deletion = true;
             }
-            if(!(checkVar(name,len))){
+            else if(!(checkVar(name,len))){
                 goodVars = false;
             }
             //target = strtok(NULL,"\n");
@@ -1486,7 +1488,6 @@ void brancher(int cl,int8_t repeat, Thread* thread){
 void* start(void* arg) {
     Thread* thread = (Thread*)arg;
     while (true) {
-        printf("Thread waiting!It's quite patient though\n");
         if (0 != sem_wait(&thread->mutex)) err(2,"sem_wait in thread");
         thread->inUse = true;
         brancher(thread->cl,-1,thread);
@@ -1569,11 +1570,7 @@ int main(int argc, char *argv[]) {
     if (0 != sem_post(&mainMutex)) err(2,"sem_post of main by thread");
     if (0 != sem_post(&fileMutex)) err(2,"sem_post (file) in load");
     optcode = initLoad(varstore,dir,&fd);
-    if(optcode >0){
-        printf("intial load failed with error code %d",optcode);
-        loadfail = true;
-        //exit(optcode);
-    }
+    if(optcode > 0) err(2,"initial load failed, likely bad dir");
     if(!loadfail){
         struct hostent *hent = gethostbyname(token /* eg "localhost" */);
         struct sockaddr_in addr;
